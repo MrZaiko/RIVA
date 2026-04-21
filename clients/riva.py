@@ -13,11 +13,11 @@ import json
 import os
 
 import tiktoken
-
 import wandb
-from aiopslab.orchestrator import Orchestrator
 from aiopslab.orchestrator.actions.base import MAX_TOOLS_PER_GOAL, tool_history
 from aiopslab.orchestrator.problems.registry import ProblemRegistry
+
+from aiopslab.orchestrator import Orchestrator
 from clients.utils.llm import GPTClient
 from clients.utils.riva_prompts import GENERATOR_DOCS, VERIFIER_DOCS
 from clients.utils.templates import DOCS
@@ -353,76 +353,70 @@ if __name__ == "__main__":
         for a in actions:
             tool_history = {}
 
-            for i in range(2):
-                orchestrator = Orchestrator()
+            orchestrator = Orchestrator()
 
-                if i == 0:
-                    agent = Agent()
-                    orchestrator.register_agent(agent, name="react")
+            agent = RIVAAgent()
+            orchestrator.register_agent(agent, name="riva")
 
-                else:
-                    agent = RIVAAgent()
-                    orchestrator.register_agent(agent, name="riva")
+            try:
+                problem_desc, instructs, apis = orchestrator.init_problem(
+                    pid, incorrect_actions=a
+                )
 
-                try:
-                    problem_desc, instructs, apis = orchestrator.init_problem(
-                        pid, incorrect_actions=a
+                agent.init_context(problem_desc, instructs, apis)
+
+                full_output = asyncio.run(orchestrator.start_problem(max_steps=45))
+
+                print("Full output:")
+                print(full_output.keys())
+
+                session_dict = full_output["session"]
+                print("Session")
+                print(session_dict.keys())
+
+                result_dict = session_dict["results"]
+                print("Results")
+                print(result_dict.keys())
+
+                filename = f"runs/riva_{pid}_{a}.json"
+                with open(filename, "w") as f:
+                    json.dump(result_dict, f, indent=2)
+
+                if "localization" in session_dict["problem_id"].lower():
+                    session_dict["task_accuracy"] = (
+                        "Correct"
+                        if result_dict["Localization Accuracy"] == 100
+                        else "Incorrect"
                     )
+                    session_dict["type"] = "localization"
 
-                    agent.init_context(problem_desc, instructs, apis)
+                elif "detection" in session_dict["problem_id"].lower():
+                    session_dict["task_accuracy"] = (
+                        "Correct"
+                        if result_dict["Detection Accuracy"] == "Correct"
+                        else "Incorrect"
+                    )
+                    session_dict["type"] = "detection"
 
-                    full_output = asyncio.run(orchestrator.start_problem(max_steps=45))
+                elif "analysis" in session_dict["problem_id"].lower():
+                    session_dict["task_accuracy"] = (
+                        "Correct"
+                        if result_dict["fault_type_correct"] is True
+                        else "Incorrect"
+                    )
+                    session_dict["type"] = "analysis"
 
-                    print("Full output:")
-                    print(full_output.keys())
+                session_dict["incorrect_tool"] = "none" if len(a) == 0 else f"{a}"
+                session_dict["k"] = MAX_TOOLS_PER_GOAL
+                session_dict["agent_type"] = "riva"
 
-                    session_dict = full_output["session"]
-                    print("Session")
-                    print(session_dict.keys())
+                wandb.log(session_dict)
 
-                    result_dict = session_dict["results"]
-                    print("Results")
-                    print(result_dict.keys())
+            except Exception as e:
+                import traceback
 
-                    filename = f"runs/{'react' if i == 0 else 'riva'}_{pid}_{a}.json"
-                    with open(filename, "w") as f:
-                        json.dump(result_dict, f, indent=2)
-
-                    if "localization" in session_dict["problem_id"].lower():
-                        session_dict["task_accuracy"] = (
-                            "Correct"
-                            if result_dict["Localization Accuracy"] == 100
-                            else "Incorrect"
-                        )
-                        session_dict["type"] = "localization"
-
-                    elif "detection" in session_dict["problem_id"].lower():
-                        session_dict["task_accuracy"] = (
-                            "Correct"
-                            if result_dict["Detection Accuracy"] == "Correct"
-                            else "Incorrect"
-                        )
-                        session_dict["type"] = "detection"
-
-                    elif "analysis" in session_dict["problem_id"].lower():
-                        session_dict["task_accuracy"] = (
-                            "Correct"
-                            if result_dict["fault_type_correct"] is True
-                            else "Incorrect"
-                        )
-                        session_dict["type"] = "analysis"
-
-                    session_dict["incorrect_tool"] = "none" if len(a) == 0 else f"{a}"
-                    session_dict["k"] = MAX_TOOLS_PER_GOAL
-                    session_dict["agent_type"] = "riva" if i == 1 else "react"
-
-                    wandb.log(session_dict)
-
-                except Exception as e:
-                    import traceback
-
-                    print(f"Error while running problem {pid}: {e}")
-                    traceback.print_exc()
+                print(f"Error while running problem {pid}: {e}")
+                traceback.print_exc()
 
     if use_wandb:
         app.alert(title="Run Completed", text="All problems have been run.")
