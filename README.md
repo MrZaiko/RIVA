@@ -11,27 +11,12 @@ RIVA (Robust Infrastructure by Verification Agents) is a multi-agent system for 
 
 ## Repository Structure
 
-- `modifications.patch` — Full diff of changes (`git diff main...experiments`)
 - `run_experiments.sh` — Script to set up a Kind cluster and run experiments
-- `clients/` — Agent client implementations (RIVA client, ReAct baseline, GPT baseline)
+- `clients/` — Agent client implementations (RIVA client)
 - `clients/utils/` — Shared utilities (LLM interface, RIVA prompts, templates)
-- `aiopslab/` — Modified AIOpsLab framework components (orchestrator, session, services)
-- `tests/` — Test files
+- `aiopslab/` — Modified AIOpsLab framework components (orchestrator, session)
 
 ## Reproducing Results
-
-### Option A: Apply the patch
-
-```bash
-# Clone AIOpsLab
-git clone https://github.com/microsoft/AIOpsLab.git
-cd AIOpsLab
-
-# Apply modifications
-git apply riva/modifications.patch
-```
-
-### Option B: Manual setup
 
 Copy the files from this folder into the corresponding locations in the AIOpsLab repository, preserving the directory structure.
 
